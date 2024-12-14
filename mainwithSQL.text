@@ -1,0 +1,55 @@
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_security_group" "db_sg" {
+  name = "db-sg"
+
+  ingress {
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+resource "aws_db_instance" "holidaysdb" {
+  allocated_storage    = 20
+  storage_type         = "gp2"
+  engine               = "mysql"
+  instance_class       = "db.t2.micro"
+  db_name              = "holidaysdb"
+  username             = "admin"
+  password             = "your_password"
+  publicly_accessible  = true
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  skip_final_snapshot  = true
+  engine_version       = "8.0.23"
+}
+
+resource "null_resource" "insert_data" {
+  depends_on = [aws_db_instance.holidaysdb]
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      mysql -h ${aws_db_instance.holidaysdb.endpoint} -u admin -p${aws_db_instance.holidaysdb.password} -e "
+        CREATE TABLE holidays (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(100) NOT NULL,
+          date DATE NOT NULL
+        );
+        INSERT INTO holidays (name, date) VALUES
+          ('New Year', '2024-01-01'),
+          ('Republic Day', '2024-01-26'),
+          ('Diwali', '2024-11-12');
+      "
+    EOT
+  }
+}
